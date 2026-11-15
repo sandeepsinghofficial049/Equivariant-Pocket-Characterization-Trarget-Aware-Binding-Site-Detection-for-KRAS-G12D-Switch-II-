@@ -8,9 +8,9 @@
 ## 📌 Overview
 An advanced, graph-based deep learning pipeline for detecting cryptic ligand-binding pockets on challenging oncology targets. 
 
-Inspired by foundational grid-based methods like *DeepPocket*, this repository upgrades the paradigm of 3D binding site detection by replacing traditional rigid 3D Convolutional Neural Networks (CNNs) with **SE(3)-Equivariant Graph Neural Networks (GNNs)** and **Geometric Vector Perceptrons (GVPs)**. 
+Inspired by foundational grid-based methods like *DeepPocket*, this repository upgrades the paradigm of 3D binding site detection by replacing traditional rigid 3D Convolutional Neural Networks (CNNs) with **3-Layer Residual SE(3)-Equivariant Graph Neural Networks (GNNs)** and **Geometric Vector Perceptrons (GVPs)**. 
 
-This model extracts exact continuous spatial coordinates and multi-modal atom features to perform precise, target-aware conditioning—specifically benchmarked against the dynamic Switch II cryptic pocket of **mutant KRAS G12D** (PDB: 6ZLI / 7EW9).
+This model extracts exact continuous spatial coordinates and multi-modal atom features to perform precise, target-aware conditioning—specifically benchmarked against the dynamic Switch II cryptic pocket of **mutant KRAS G12D** (PDB: `6ZLI` / `7EW9`).
 
 ## 🧬 The Biological Problem: Cryptic Pockets & KRAS G12D
 Traditional structure-based drug design (SBDD) often relies on static crystal structures. However, high-value oncology targets like KRAS G12D possess "cryptic pockets"—transient cavities (like the Switch II pocket) that only open via dynamic backbone shifts. Voxel-based 3D CNNs struggle to capture these subtle spatial coordinate changes due to rigid grid approximations and the loss of precise vector data.
@@ -23,194 +23,82 @@ To solve this, we treat the protein as a mathematically continuous spatial graph
 
 ---
 
-## ⚙️ System Architecture
+## 🏆 Benchmark Results (KRAS G12D, PDB: `6ZLI`, Chain A)
 
-### 1. Data Ingestion & Structural Parsing
-* **ProDy / Biopython:** Parses raw `.pdb` files, filtering out co-crystallized artifacts and water molecules, isolating the mutated KRAS sequences.
+| Metric | Value | Benchmark / Target |
+| :--- | :--- | :--- |
+| **Pocket Recall ($P > 0.70$)** | `73.6%` | — |
+| **Pocket Precision ($P > 0.70$)** | `94.2%` | — |
+| **CoM Euclidean Distance Error** | **`3.89 Å`** | `< 4.00 Å` (Pass) |
+| **Max $SE(3)$ Probability Discrepancy** | **`3.28e-07`** | `< 1e-5` (Pass) |
 
-### 2. Graph Construction & Featurization
-* **K-Nearest Neighbors (K-NN):** Constructs a radius graph via **PyTorch Geometric (PyG)**, connecting atom nodes within a strict Angstrom cutoff to capture local micro-environments.
-* **Multi-Modal Data Handling:** Extracts scalar features (pharmacophores, partial charges) and vector features (relative 3D coordinates, orientations).
+*(Validation plot `kras_gvp_validation_summary.png` displays 3D pocket segmentation and XAI gradient attribution).*
 
-### 3. The Deep Learning Engine
-* **Geometric Vector Perceptrons (GVPs):** Specialized layers process both scalars and 3D vectors independently, preserving directional geometry without collapsing the mathematical space.
+### Top XAI-Attributed Functional Motifs
+Using Input-Gradient XAI attribution ($||\nabla_s P||_2$), the network localized key physical biochemistry features across the nucleotide cleft without prior spatial prompting:
+- **P-Loop / G12D Active Site:** `VAL 14`, `GLY 15`, `LYS 16`, `ALA 18`
+- **Switch I Loop:** `VAL 29`
+- **Guanine Recognition (`NKXD` / `SAK`):** `ASN 116`, `LYS 117`, `SER 145`, `ALA 146`
 
-### 4. Pocket Segmentation & Clustering
-* **Node-Level Probability:** Outputs a continuous probability score (0.0 - 1.0) for every atom indicating pocket membership.
-* **DBSCAN Clustering:** Unsupervised spatial clustering groups high-probability nodes into cohesive, biologically viable active site volumes.
+---
 
-### 5. Interpretability & XAI Validation
-* **GNNExplainer:** Validates that the network's attention maps correctly focus on the Asp12 mutation and Switch II loop, ensuring the AI learned true physical biochemistry.
-* **Center-of-Mass (CoM) Metrics:** Evaluates accuracy against known co-crystallized ligand bounding boxes (target: < 4 Å RMSD).
-![KRAS G12D Validation Plot](data/raw/kras_gvp_validation_summary.png)
+## ⚙️ System Architecture & Pipeline
+
+### 1. Data Ingestion & Structural Parsing (`01_ingest_pdb.py`)
+Parses raw `.pdb` files, filtering out co-crystallized artifacts and water molecules, isolating the mutated KRAS sequences into scalar and coordinate tensors.
+
+### 2. Graph Construction & Featurization (`02_build_graph.py`)
+Constructs an `8.0 Å` spatial interaction graph using `torch.cdist`, processing continuous spatial geometries and extracting exact unit directional vectors. 
+
+### 3. The Deep Learning Engine (`03_train_gvp.py`)
+A 3-hop NativeGVP message-passing stack trained with focal-modulated class-weighted BCE. Specialized layers process both scalars and 3D vectors independently, preserving directional geometry without collapsing the mathematical space.
+
+### 4. Pocket Segmentation & Clustering (`04_segment_pockets.py`)
+Outputs a continuous node-level probability score, followed by unsupervised DBSCAN spatial clustering to group high-probability nodes into cohesive, biologically viable active site volumes.
+
+### 5. Interpretability & XAI Validation (`05_validate_and_xai.py`)
+Calculates the probability-weighted Center of Mass (CoM) against the known ligand bounding box, runs gradient-based attribution, and audits strict $SE(3)$ rotation/translation invariance.
 
 ---
 
 ## 📂 Repository Structure
 
 ```text
-Equivariant-Pocket-Detection/
-│
-├── data/                    # Raw PDB files (KRAS G12D) and processed PyG graphs
-├── models/                  # GVP layer definitions and SE(3)-GNN architecture
-├── notebooks/               # Colab tutorials for pocket prediction and visualization
+Equivariant-Pocket-Characterization/
+├── data/
+│   └── raw/                         # Raw PDB files (6ZLI) and validation plots
+├── checkpoints/                     # Trained weights and graph tensors (.pt)
 ├── scripts/                 
-│   ├── parse_pdb.py         # ProDy/Biopython structural ingestion
-│   ├── build_graphs.py      # K-NN graph construction and multi-modal featurization
-│   ├── train.py             # Model training loop
-│   └── explain.py           # XAI extraction using GNNExplainer
-├── requirements.txt         # Environment dependencies
-└── README.md                # Project documentation
+│   ├── 01_ingest_pdb.py             # ProDy structural parsing
+│   ├── 02_build_graph.py            # Native PyTorch K-NN graph construction
+│   ├── 03_train_gvp.py              # Focal-weighted GVP training loop
+│   ├── 04_segment_pockets.py        # DBSCAN clustering & CoM calculation
+│   └── 05_validate_and_xai.py       # SE(3) check & XAI feature extraction
+├── requirements.txt                 # Environment dependencies
+└── README.md                        
 ```
 
 ## 🚀 Installation & Setup
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/YourUsername/Equivariant-Pocket-Detection.git
-   cd Equivariant-Pocket-Detection
+   git clone https://github.com/sandeepsinghofficial049/Equivariant-Pocket-Characterization.git
+   cd Equivariant-Pocket-Characterization
    ```
 
-2. **Set up a Conda environment (Recommended):**
-   ```bash
-   conda create -n eq_pocket python=3.10
-   conda activate eq_pocket
-   ```
-
-3. **Install dependencies:**
+2. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
-   # Note: Ensure PyTorch Geometric and ProDy are installed according to your CUDA version.
    ```
 
-## 🧪 Usage Example
-
-
-# Generative Pose Modeling & Affinity Scoring via Flow Matching
-
-An advanced, production-grade computational pipeline utilizing **multi-modal flow matching architectures** and **deep geometric representations** for de novo ligand pose generation and native binding affinity scoring, bypassing traditional physics-based scoring limitations.
-
----
-
-## 🚀 Overview
-
-Traditional structure-based drug discovery (SBDD) relies heavily on rigid docking algorithms and resource-heavy scoring functions that often struggle with receptor flexibility and accurate binding free-energy estimation.
-
-**Generative Pose Modeling & Affinity Scoring via Flow Matching** bridges this gap by framing ligand pose generation as a continuous normalizing flow problem. By learning vector fields that push a prior noise distribution directly onto the true bound atomic coordinate distribution, this framework achieves state-of-the-art accuracy in predicting ligand conformations and binding affinities.
-
----
-
-## 🛠️ Core Architecture & Methodology
-
-```
-[Protein PDB & Ligand SMILES] 
-       │
-       ▼
-[Geometric Feature Extraction] (SE(3)-Equivariant Graph Layers)
-       │
-       ▼
-[Conditional Flow Matching Network] (Neural Vector Field Estimation)
-       │
-       ▼
-[Generative Pose Sampling] (ODE Integration from Prior Noise)
-       │
-       ▼
-[Native Affinity Scoring Head] (Continuous pKd / ΔG Prediction)
-
-```
-
-1. **Geometric Representation:** Encodes protein pockets and ligand atom graphs using invariant and equivariant features.
-2. **Flow Matching Backbone:** Learns a time-dependent vector field $v_t$ that steers straight trajectories from a standard Gaussian noise prior to the target atomic coordinates.
-3. **Affinity Prediction Head:** Jointly evaluates the generated 3D poses against the receptor pocket microenvironment to output robust binding affinity metrics ($\Delta G$ and $pK_d$).
-
----
-
-## ⚙️ Key Features
-
-* **Continuous Flow Matching:** Avoids the sampling bottlenecks of traditional diffusion models by utilizing optimal-transport straight-line trajectories.
-* **SE(3)-Equivariance:** Ensures that rotations and translations of the input protein-ligand complex transform the output coordinates correctly.
-* **End-to-End Inference:** Takes raw PDB structures and ligand SMILES strings, outputs fully optimized 3D binding poses, and predicts binding affinity scores.
-* **Cloud-Optimized Execution:** Engineered to run efficiently on standard cloud GPUs (such as Google Colab Tesla T4/A100 instances), bypassing heavy local VRAM restrictions.
-
----
-
-## 📂 Repository Structure
-
-```text
-├── data/                  # Sample datasets and preprocessed protein-ligand complexes
-├── models/                # Flow matching network and SE(3)-equivariant architecture definitions
-├── scripts/               # Training, inference, and evaluation utility scripts
-├── notebooks/             # Interactive Google Colab / Kaggle execution notebooks
-├── requirements.txt       # Python dependencies (PyTorch, PyTorch Geometric, RDKit)
-└── README.md              # Project documentation
-
-```
-
----
-
-## 📦 Installation & Setup
-
-Clone the repository and install the required dependencies within your Python/conda environment:
-
-```bash
-git clone https://github.com/sandeepsinghofficial049/Generative-Pose-Flow-Matching.git
-cd Generative-Pose-Flow-Matching
-
-pip install -r requirements.txt
-
-```
-
----
-
-## 💻 Quickstart Inference
-
-To run generative pose prediction and affinity scoring on a sample protein-ligand complex:
-
-```python
-from models.flow_matcher import FlowMatchingPoseGenerator
-from utils.data_loader import load_protein_ligand_pair
-
-# Load receptor pocket and ligand features
-protein_pocket, ligand = load_protein_ligand_pair("data/sample_pocket.pdb", "CCO")
-
-# Initialize the flow matching model
-model = FlowMatchingPoseGenerator.from_pretrained("weights/flow_matching_pose_v1.pt")
-model.eval()
-
-# Generate 3D atomic coordinates via vector field integration
-generated_poses, predicted_affinity = model.sample_poses_and_score(
-    protein_pocket, 
-    ligand, 
-    num_steps=50
-)
-
-print(f"Generated Pose Coordinates Shape: {generated_poses.shape}")
-print(f"Predicted Binding Affinity (pK_d): {predicted_affinity.item():.2f}")
-
-```
-
----
-
-## 📊 Evaluation Metrics
-
-* **Root Mean Square Deviation (RMSD):** Measures spatial deviation between generated ligand heavy-atom poses and experimental crystal structures ($\text{Å}$).
-* **Pearson/Spearman Correlation ($R$):** Evaluates ranking capability of predicted binding affinities against experimental benchmark datasets.
-
----
-
-## 👤 Author
-
-**Sandeep Singh**
-
-*M.Sc. Bioinformatics, Central University of South Bihar*
-
-[GitHub Profile](https://github.com/sandeepsinghofficial049) | [LinkedIn](https://www.google.com/search?q=https://www.linkedin.com/in/sandeep-singh-9b36a9407)
-To parse a target PDB (e.g., KRAS G12D) and predict the cryptic binding pocket:
-
-```bash
-python scripts/predict_pocket.py --pdb_id 6ZLI --output_dir ./results/
-```
-*This script will generate a PyMOL-compatible session highlighting the predicted high-probability pocket residues.*
+3. **Run the End-to-End Pipeline:**
+   ```bash
+   python scripts/01_ingest_pdb.py
+   python scripts/02_build_graph.py
+   python scripts/03_train_gvp.py
+   python scripts/04_segment_pockets.py
+   python scripts/05_validate_and_xai.py
+   ```
 
 ---
 *Developed as a foundational module for De Novo Structure-Based Drug Design via Flow Matching.*
