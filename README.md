@@ -42,6 +42,7 @@ To solve this, we treat the protein as a mathematically continuous spatial graph
 ### 5. Interpretability & XAI Validation
 * **GNNExplainer:** Validates that the network's attention maps correctly focus on the Asp12 mutation and Switch II loop, ensuring the AI learned true physical biochemistry.
 * **Center-of-Mass (CoM) Metrics:** Evaluates accuracy against known co-crystallized ligand bounding boxes (target: < 4 Å RMSD).
+![KRAS G12D Validation Plot](data/raw/kras_gvp_validation_summary.png)
 
 ---
 
