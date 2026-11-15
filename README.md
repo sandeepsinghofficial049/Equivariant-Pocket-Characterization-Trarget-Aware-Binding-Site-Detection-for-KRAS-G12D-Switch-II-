@@ -33,6 +33,7 @@ To solve this, we treat the protein as a mathematically continuous spatial graph
 | **Max $SE(3)$ Probability Discrepancy** | **`3.28e-07`** | `< 1e-5` (Pass) |
 
 *(Validation plot `kras_gvp_validation_summary.png` displays 3D pocket segmentation and XAI gradient attribution).*
+![KRAS G12D Validation Plot](data/raw/kras_gvp_validation_summary.png)
 
 ### Top XAI-Attributed Functional Motifs
 Using Input-Gradient XAI attribution ($||\nabla_s P||_2$), the network localized key physical biochemistry features across the nucleotide cleft without prior spatial prompting:
